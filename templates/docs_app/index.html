@@ -1,0 +1,121 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown 관리 페이지</title>
+    <link rel="stylesheet" href="{% static 'docs_app/styles.css' %}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Markdown 관리 페이지</h1>
+        <p>다수 문서 업로드, 중요 라인 표시, 코멘트 협업</p>
+      </div>
+      <div class="author-wrap">
+        <label for="authorInput">작성자</label>
+        <input id="authorInput" type="text" maxlength="30" placeholder="이름 입력 (예: Jangmi)" />
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel sidebar">
+        <h2>문서 등록</h2>
+        <div class="field">
+          <label for="fileInput">Markdown 파일 업로드 (.md, 다중 선택)</label>
+          <input id="fileInput" type="file" accept=".md,text/markdown,text/plain" multiple />
+        </div>
+
+        <form id="manualForm" class="manual-form">
+          <h3>텍스트로 직접 추가</h3>
+          <label for="manualTitle">제목</label>
+          <input id="manualTitle" type="text" placeholder="문서 제목" />
+          <label for="manualContent">내용 (Markdown)</label>
+          <textarea id="manualContent" rows="10" placeholder="# 예시&#10;직접 Markdown을 입력하세요."></textarea>
+          <button type="submit">문서 추가</button>
+        </form>
+
+        <div class="divider"></div>
+
+        <div class="doc-list-head">
+          <h2>문서 목록</h2>
+          <span id="docCount">0개</span>
+        </div>
+        <input id="docSearch" type="text" placeholder="제목/내용 검색" />
+        <ul id="docList" class="doc-list"></ul>
+      </section>
+
+      <section class="panel viewer">
+        <div id="emptyState" class="empty-state">
+          등록된 문서가 없습니다. 왼쪽에서 파일 업로드 또는 텍스트 입력으로 시작하세요.
+        </div>
+
+        <div id="docWorkspace" class="workspace hidden">
+          <div class="workspace-head">
+            <div class="title-edit-wrap">
+              <label for="docTitleInput">문서 제목</label>
+              <input id="docTitleInput" type="text" />
+            </div>
+            <div class="actions">
+              <button id="saveDocBtn" type="button">저장</button>
+              <button id="deleteDocBtn" type="button" class="danger">삭제</button>
+            </div>
+          </div>
+
+          <p id="docMeta" class="meta"></p>
+
+          <div class="editor-preview-grid">
+            <div class="subpanel">
+              <h3>원문 편집</h3>
+              <textarea id="docContentInput" rows="20"></textarea>
+            </div>
+            <div class="subpanel">
+              <h3>Markdown 미리보기</h3>
+              <article id="markdownPreview" class="markdown-body"></article>
+            </div>
+          </div>
+
+          <div class="subpanel">
+            <h3>라인 뷰 (중요 라인/라인 코멘트 대상)</h3>
+            <div id="lineView" class="line-view"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel comments">
+        <h2>협업 코멘트</h2>
+        <p class="meta">현재 선택 라인: <strong id="selectedLineLabel">없음</strong></p>
+        <button id="toggleImportantBtn" type="button">선택 라인 중요 표시 토글</button>
+
+        <form id="commentForm" class="comment-form">
+          <label for="commentTarget">코멘트 대상</label>
+          <select id="commentTarget">
+            <option value="document">문서 전체</option>
+            <option value="line">선택 라인</option>
+          </select>
+
+          <label for="commentText">코멘트</label>
+          <textarea id="commentText" rows="5" placeholder="의견을 입력하세요."></textarea>
+          <button type="submit">코멘트 추가</button>
+        </form>
+
+        <div class="divider"></div>
+        <h3>코멘트 목록</h3>
+        <ul id="commentList" class="comment-list"></ul>
+
+        <div class="divider"></div>
+        <h3>추가 아이디어: 리뷰 요약 생성</h3>
+        <button id="summaryBtn" type="button">현재 문서 요약 만들기</button>
+        <button id="downloadSummaryBtn" type="button">요약 .md 다운로드</button>
+        <textarea id="summaryOutput" rows="10" readonly placeholder="요약을 생성하면 여기에 표시됩니다."></textarea>
+      </aside>
+    </main>
+
+    <footer class="status-bar">
+      <span id="statusText">준비됨</span>
+    </footer>
+
+    <script src="{% static 'docs_app/app.js' %}"></script>
+  </body>
+</html>
