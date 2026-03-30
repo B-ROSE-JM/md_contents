@@ -57,10 +57,24 @@ function inlineMarkdown(input) {
     .replace(/\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
 }
 
+function renderFencedCodeBlock(codeLines, language) {
+  const lang = (language || "").toLowerCase();
+  const code = codeLines.join("\n");
+
+  if (lang === "mermaid") {
+    return '<div class="mermaid">' + escapeHtml(code) + "</div>";
+  }
+
+  const safeLang = lang ? ' class="language-' + escapeHtml(lang) + '"' : "";
+  return "<pre><code" + safeLang + ">" + escapeHtml(code) + "</code></pre>";
+}
+
 function markdownToHtml(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let inCode = false;
+  let codeLanguage = "";
+  let codeBuffer = [];
   let inUl = false;
   let inOl = false;
 
@@ -79,20 +93,24 @@ function markdownToHtml(markdown) {
     const rawLine = lines[i];
     const line = rawLine || "";
 
-    if (/^```/.test(line.trim())) {
+    const fenceMatch = line.trim().match(/^```([a-zA-Z0-9_-]+)?/);
+    if (fenceMatch) {
       closeLists();
       if (!inCode) {
-        html.push("<pre><code>");
+        codeLanguage = (fenceMatch[1] || "").trim();
+        codeBuffer = [];
         inCode = true;
       } else {
-        html.push("</code></pre>");
+        html.push(renderFencedCodeBlock(codeBuffer, codeLanguage));
+        codeLanguage = "";
+        codeBuffer = [];
         inCode = false;
       }
       continue;
     }
 
     if (inCode) {
-      html.push(escapeHtml(line) + "\n");
+      codeBuffer.push(line);
       continue;
     }
 
@@ -155,7 +173,7 @@ function markdownToHtml(markdown) {
   }
 
   if (inCode) {
-    html.push("</code></pre>");
+    html.push(renderFencedCodeBlock(codeBuffer, codeLanguage));
   }
   if (inUl) {
     html.push("</ul>");
@@ -165,6 +183,39 @@ function markdownToHtml(markdown) {
   }
 
   return html.join("");
+}
+
+function renderMermaidInPreview() {
+  if (!window.mermaid || !els.markdownPreview) {
+    return;
+  }
+  const hasMermaidNode = !!els.markdownPreview.querySelector(".mermaid");
+  if (!hasMermaidNode) {
+    return;
+  }
+
+  if (!window.__mdManagerMermaidInitialized) {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "loose",
+      theme: "default"
+    });
+    window.__mdManagerMermaidInitialized = true;
+  }
+
+  window.mermaid.run({ querySelector: "#markdownPreview .mermaid" }).catch(function () {
+    const nodes = els.markdownPreview.querySelectorAll(".mermaid");
+    nodes.forEach(function (node) {
+      const source = node.textContent || "";
+      node.innerHTML =
+        '<p class="mermaid-error">Mermaid 렌더링 실패</p><pre><code>' + escapeHtml(source) + "</code></pre>";
+    });
+  });
+}
+
+function renderMarkdownPreview(content) {
+  els.markdownPreview.innerHTML = markdownToHtml(content);
+  renderMermaidInPreview();
 }
 
 async function apiFetch(path, options) {
@@ -345,7 +396,7 @@ function renderWorkspace() {
     doc.source;
   els.selectedLineLabel.textContent = state.selectedLine ? String(state.selectedLine) : "없음";
 
-  els.markdownPreview.innerHTML = markdownToHtml(els.docContentInput.value);
+  renderMarkdownPreview(els.docContentInput.value);
   renderLineView(els.docContentInput.value, doc.importantLines || []);
   renderComments(doc);
 }
@@ -684,7 +735,7 @@ function bindEvents() {
     if (!doc) {
       return;
     }
-    els.markdownPreview.innerHTML = markdownToHtml(els.docContentInput.value);
+    renderMarkdownPreview(els.docContentInput.value);
     renderLineView(els.docContentInput.value, doc.importantLines || []);
     setStatus("문서가 수정됨. 저장 버튼을 눌러 반영하세요.");
   });
