@@ -213,15 +213,158 @@ function renderMermaidInPreview() {
     window.__mdManagerMermaidInitialized = true;
   }
 
-  window.mermaid.run({ querySelector: "#markdownPreview .mermaid" }).catch(function () {
-    const nodes = els.markdownPreview.querySelectorAll(".mermaid");
-    nodes.forEach(function (node) {
-      const source = node.textContent || "";
-      node.innerHTML =
-        '<p class="mermaid-error">Mermaid render failed</p><pre><code>' +
-        escapeHtml(source) +
-        "</code></pre>";
+  window.mermaid
+    .run({ querySelector: "#markdownPreview .mermaid" })
+    .then(function () {
+      enableMermaidInteractions();
+      updatePreviewLineState(getSelectedDoc());
+    })
+    .catch(function () {
+      const nodes = els.markdownPreview.querySelectorAll(".mermaid");
+      nodes.forEach(function (node) {
+        const source = node.textContent || "";
+        node.innerHTML =
+          '<p class="mermaid-error">Mermaid render failed</p><pre><code>' +
+          escapeHtml(source) +
+          "</code></pre>";
+      });
     });
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function enableMermaidInteractions() {
+  const mermaidNodes = Array.from(els.markdownPreview.querySelectorAll(".mermaid"));
+
+  mermaidNodes.forEach(function (node) {
+    const svg = node.querySelector("svg");
+    if (!svg || node.dataset.interactiveReady === "true") {
+      return;
+    }
+
+    node.dataset.interactiveReady = "true";
+    const viewBox = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal : null;
+    const baseWidth = viewBox && viewBox.width ? viewBox.width : svg.width.baseVal.value || 800;
+    const baseHeight = viewBox && viewBox.height ? viewBox.height : svg.height.baseVal.value || 500;
+
+    const controls = document.createElement("div");
+    controls.className = "diagram-controls";
+    controls.innerHTML =
+      '<button type="button" data-action="zoom-in" title="확대">+</button>' +
+      '<button type="button" data-action="zoom-out" title="축소">-</button>' +
+      '<button type="button" data-action="reset" title="초기화">리셋</button>';
+
+    const viewport = document.createElement("div");
+    viewport.className = "diagram-viewport";
+
+    const stateView = { scale: 1, x: 0, y: 0, min: 0.3, max: 4.0 };
+    let panSession = null;
+
+    function applyTransform() {
+      svg.style.transform = "translate(" + stateView.x + "px," + stateView.y + "px) scale(" + stateView.scale + ")";
+    }
+
+    function setScale(nextScale, focusX, focusY) {
+      const prevScale = stateView.scale;
+      const newScale = clamp(nextScale, stateView.min, stateView.max);
+      if (newScale === prevScale) {
+        return;
+      }
+      if (typeof focusX === "number" && typeof focusY === "number") {
+        stateView.x = focusX - ((focusX - stateView.x) / prevScale) * newScale;
+        stateView.y = focusY - ((focusY - stateView.y) / prevScale) * newScale;
+      }
+      stateView.scale = newScale;
+      applyTransform();
+    }
+
+    function resetView() {
+      const bounds = viewport.getBoundingClientRect();
+      const fitScale = clamp(Math.min(bounds.width / baseWidth, bounds.height / baseHeight), stateView.min, 1);
+      stateView.scale = fitScale;
+      stateView.x = Math.max((bounds.width - baseWidth * fitScale) / 2, 8);
+      stateView.y = Math.max((bounds.height - baseHeight * fitScale) / 2, 8);
+      applyTransform();
+    }
+
+    controls.addEventListener("click", function (event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) {
+        return;
+      }
+      const action = button.getAttribute("data-action");
+      if (action === "zoom-in") {
+        setScale(stateView.scale * 1.15, viewport.clientWidth / 2, viewport.clientHeight / 2);
+      } else if (action === "zoom-out") {
+        setScale(stateView.scale / 1.15, viewport.clientWidth / 2, viewport.clientHeight / 2);
+      } else if (action === "reset") {
+        resetView();
+      }
+    });
+
+    viewport.addEventListener(
+      "wheel",
+      function (event) {
+        event.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const fx = event.clientX - rect.left;
+        const fy = event.clientY - rect.top;
+        const ratio = event.deltaY < 0 ? 1.1 : 0.9;
+        setScale(stateView.scale * ratio, fx, fy);
+      },
+      { passive: false }
+    );
+
+    viewport.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) {
+        return;
+      }
+      panSession = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      viewport.classList.add("is-panning");
+      viewport.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    viewport.addEventListener("pointermove", function (event) {
+      if (!panSession || panSession.pointerId !== event.pointerId) {
+        return;
+      }
+      const dx = event.clientX - panSession.x;
+      const dy = event.clientY - panSession.y;
+      panSession.x = event.clientX;
+      panSession.y = event.clientY;
+      stateView.x += dx;
+      stateView.y += dy;
+      applyTransform();
+    });
+
+    function finishPan(event) {
+      if (!panSession || panSession.pointerId !== event.pointerId) {
+        return;
+      }
+      panSession = null;
+      viewport.classList.remove("is-panning");
+      if (viewport.hasPointerCapture(event.pointerId)) {
+        viewport.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    viewport.addEventListener("pointerup", finishPan);
+    viewport.addEventListener("pointercancel", finishPan);
+    viewport.addEventListener("dblclick", function () {
+      resetView();
+    });
+
+    node.appendChild(controls);
+    node.appendChild(viewport);
+    viewport.appendChild(svg);
+
+    applyTransform();
+    setTimeout(function () {
+      resetView();
+    }, 0);
   });
 }
 
@@ -572,6 +715,10 @@ function handleLineClick(event) {
 }
 
 function handlePreviewClick(event) {
+  if (event.target.closest(".diagram-controls")) {
+    return;
+  }
+
   const previewLineNode = event.target.closest("[data-line]");
   if (!previewLineNode || !els.markdownPreview.contains(previewLineNode)) {
     return;
