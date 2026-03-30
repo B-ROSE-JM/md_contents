@@ -53,27 +53,17 @@
 
         <div id="docWorkspace" class="workspace hidden">
           <div class="workspace-head">
-            <div class="title-edit-wrap">
-              <label for="docTitleInput">문서 제목</label>
-              <input id="docTitleInput" type="text" />
-            </div>
+            <h3 id="docTitleText" class="doc-title-text"></h3>
             <div class="actions">
-              <button id="saveDocBtn" type="button">저장</button>
               <button id="deleteDocBtn" type="button" class="danger">삭제</button>
             </div>
           </div>
 
           <p id="docMeta" class="meta"></p>
 
-          <div class="editor-preview-grid">
-            <div class="subpanel">
-              <h3>원문 편집</h3>
-              <textarea id="docContentInput" rows="20"></textarea>
-            </div>
-            <div class="subpanel">
-              <h3>Markdown 미리보기</h3>
-              <article id="markdownPreview" class="markdown-body"></article>
-            </div>
+          <div class="subpanel">
+            <h3>Markdown 미리보기</h3>
+            <article id="markdownPreview" class="markdown-body"></article>
           </div>
 
           <div class="subpanel">

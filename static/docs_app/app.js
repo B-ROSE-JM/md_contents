@@ -16,10 +16,8 @@ const els = {
   docCount: document.getElementById("docCount"),
   emptyState: document.getElementById("emptyState"),
   docWorkspace: document.getElementById("docWorkspace"),
-  docTitleInput: document.getElementById("docTitleInput"),
-  docContentInput: document.getElementById("docContentInput"),
+  docTitleText: document.getElementById("docTitleText"),
   docMeta: document.getElementById("docMeta"),
-  saveDocBtn: document.getElementById("saveDocBtn"),
   deleteDocBtn: document.getElementById("deleteDocBtn"),
   markdownPreview: document.getElementById("markdownPreview"),
   lineView: document.getElementById("lineView"),
@@ -36,11 +34,13 @@ const els = {
 };
 
 function setStatus(message) {
-  els.statusText.textContent = message;
+  if (els.statusText) {
+    els.statusText.textContent = message;
+  }
 }
 
 function escapeHtml(input) {
-  return input
+  return (input || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -54,27 +54,32 @@ function inlineMarkdown(input) {
     .replace(/`([^`]+?)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+?)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    .replace(
+      /\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noreferrer">$1</a>'
+    );
 }
 
-function renderFencedCodeBlock(codeLines, language) {
+function renderFencedCodeBlock(codeLines, language, lineNumber) {
   const lang = (language || "").toLowerCase();
   const code = codeLines.join("\n");
+  const lineAttr = lineNumber ? ' data-line="' + lineNumber + '"' : "";
 
   if (lang === "mermaid") {
-    return '<div class="mermaid">' + escapeHtml(code) + "</div>";
+    return '<div class="mermaid"' + lineAttr + ">" + escapeHtml(code) + "</div>";
   }
 
   const safeLang = lang ? ' class="language-' + escapeHtml(lang) + '"' : "";
-  return "<pre><code" + safeLang + ">" + escapeHtml(code) + "</code></pre>";
+  return "<pre" + lineAttr + "><code" + safeLang + ">" + escapeHtml(code) + "</code></pre>";
 }
 
 function markdownToHtml(markdown) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const lines = (markdown || "").replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let inCode = false;
   let codeLanguage = "";
   let codeBuffer = [];
+  let codeStartLine = null;
   let inUl = false;
   let inOl = false;
 
@@ -90,20 +95,22 @@ function markdownToHtml(markdown) {
   }
 
   for (let i = 0; i < lines.length; i += 1) {
-    const rawLine = lines[i];
-    const line = rawLine || "";
-
+    const line = lines[i] || "";
+    const lineNumber = i + 1;
     const fenceMatch = line.trim().match(/^```([a-zA-Z0-9_-]+)?/);
+
     if (fenceMatch) {
       closeLists();
       if (!inCode) {
         codeLanguage = (fenceMatch[1] || "").trim();
         codeBuffer = [];
+        codeStartLine = lineNumber;
         inCode = true;
       } else {
-        html.push(renderFencedCodeBlock(codeBuffer, codeLanguage));
+        html.push(renderFencedCodeBlock(codeBuffer, codeLanguage, codeStartLine));
         codeLanguage = "";
         codeBuffer = [];
+        codeStartLine = null;
         inCode = false;
       }
       continue;
@@ -123,7 +130,9 @@ function markdownToHtml(markdown) {
     if (heading) {
       closeLists();
       const level = heading[1].length;
-      html.push("<h" + level + ">" + inlineMarkdown(heading[2]) + "</h" + level + ">");
+      html.push(
+        "<h" + level + ' data-line="' + lineNumber + '">' + inlineMarkdown(heading[2]) + "</h" + level + ">"
+      );
       continue;
     }
 
@@ -137,7 +146,7 @@ function markdownToHtml(markdown) {
         html.push("<ol>");
         inOl = true;
       }
-      html.push("<li>" + inlineMarkdown(ordered[2]) + "</li>");
+      html.push('<li data-line="' + lineNumber + '">' + inlineMarkdown(ordered[2]) + "</li>");
       continue;
     }
 
@@ -151,29 +160,29 @@ function markdownToHtml(markdown) {
         html.push("<ul>");
         inUl = true;
       }
-      html.push("<li>" + inlineMarkdown(unordered[1]) + "</li>");
+      html.push('<li data-line="' + lineNumber + '">' + inlineMarkdown(unordered[1]) + "</li>");
       continue;
     }
 
     const quote = line.match(/^\s*>\s?(.+)$/);
     if (quote) {
       closeLists();
-      html.push("<blockquote>" + inlineMarkdown(quote[1]) + "</blockquote>");
+      html.push('<blockquote data-line="' + lineNumber + '">' + inlineMarkdown(quote[1]) + "</blockquote>");
       continue;
     }
 
     if (/^\s*---+\s*$/.test(line)) {
       closeLists();
-      html.push("<hr />");
+      html.push('<hr data-line="' + lineNumber + '" />');
       continue;
     }
 
     closeLists();
-    html.push("<p>" + inlineMarkdown(line) + "</p>");
+    html.push('<p data-line="' + lineNumber + '">' + inlineMarkdown(line) + "</p>");
   }
 
   if (inCode) {
-    html.push(renderFencedCodeBlock(codeBuffer, codeLanguage));
+    html.push(renderFencedCodeBlock(codeBuffer, codeLanguage, codeStartLine));
   }
   if (inUl) {
     html.push("</ul>");
@@ -189,6 +198,7 @@ function renderMermaidInPreview() {
   if (!window.mermaid || !els.markdownPreview) {
     return;
   }
+
   const hasMermaidNode = !!els.markdownPreview.querySelector(".mermaid");
   if (!hasMermaidNode) {
     return;
@@ -208,22 +218,89 @@ function renderMermaidInPreview() {
     nodes.forEach(function (node) {
       const source = node.textContent || "";
       node.innerHTML =
-        '<p class="mermaid-error">Mermaid 렌더링 실패</p><pre><code>' + escapeHtml(source) + "</code></pre>";
+        '<p class="mermaid-error">Mermaid render failed</p><pre><code>' +
+        escapeHtml(source) +
+        "</code></pre>";
     });
   });
 }
 
 function renderMarkdownPreview(content) {
+  if (!els.markdownPreview) {
+    return;
+  }
   els.markdownPreview.innerHTML = markdownToHtml(content);
   renderMermaidInPreview();
+}
+
+function updatePreviewLineState(doc) {
+  if (!els.markdownPreview) {
+    return;
+  }
+
+  const blocks = Array.from(els.markdownPreview.querySelectorAll("[data-line]"));
+  const importantSet = new Set((doc && doc.importantLines) || []);
+  let selectedBlock = null;
+  let closestDistance = Number.MAX_SAFE_INTEGER;
+
+  blocks.forEach(function (block) {
+    const line = Number(block.getAttribute("data-line"));
+    const isImportant = importantSet.has(line);
+    block.classList.toggle("preview-important", isImportant);
+
+    if (state.selectedLine) {
+      const distance = Math.abs(line - state.selectedLine);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        selectedBlock = block;
+      }
+    }
+  });
+
+  blocks.forEach(function (block) {
+    block.classList.remove("preview-selected");
+  });
+  if (selectedBlock) {
+    selectedBlock.classList.add("preview-selected");
+  }
+}
+
+function selectLine(lineNumber, options) {
+  const opts = options || {};
+  const doc = getSelectedDoc();
+  if (!doc) {
+    state.selectedLine = null;
+    return;
+  }
+
+  const maxLine = lineCountOf(doc.content);
+  const candidate = Number(lineNumber);
+  if (Number.isInteger(candidate) && candidate >= 1 && candidate <= maxLine) {
+    state.selectedLine = candidate;
+  } else {
+    state.selectedLine = null;
+  }
+
+  els.selectedLineLabel.textContent = state.selectedLine ? String(state.selectedLine) : "없음";
+  renderLineView(doc.content, doc.importantLines || []);
+  updatePreviewLineState(doc);
+
+  if (opts.scrollLineView && state.selectedLine) {
+    const row = els.lineView.querySelector('[data-line="' + state.selectedLine + '"]');
+    if (row) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  if (opts.autoTargetLine && state.selectedLine && els.commentTarget.value !== "line") {
+    els.commentTarget.value = "line";
+  }
 }
 
 async function apiFetch(path, options) {
   const init = {
     method: options && options.method ? options.method : "GET",
-    headers: {
-      "Content-Type": "application/json"
-    }
+    headers: { "Content-Type": "application/json" }
   };
 
   if (options && options.body !== undefined) {
@@ -232,7 +309,7 @@ async function apiFetch(path, options) {
 
   const response = await fetch(path, init);
   if (!response.ok) {
-    let errorMessage = "요청 실패 (" + response.status + ")";
+    let errorMessage = "Request failed (" + response.status + ")";
     try {
       const payload = await response.json();
       if (payload && payload.error) {
@@ -243,6 +320,7 @@ async function apiFetch(path, options) {
     }
     throw new Error(errorMessage);
   }
+
   return response.json();
 }
 
@@ -256,22 +334,11 @@ function getSelectedDoc() {
 }
 
 function lineCountOf(content) {
-  if (!content) {
-    return 1;
-  }
-  return content.split("\n").length;
-}
-
-function hasUnsavedChanges() {
-  const doc = getSelectedDoc();
-  if (!doc) {
-    return false;
-  }
-  return doc.title !== els.docTitleInput.value || doc.content !== els.docContentInput.value;
+  return content ? content.split("\n").length : 1;
 }
 
 function renderDocList() {
-  const query = els.docSearch.value.trim().toLowerCase();
+  const query = (els.docSearch.value || "").trim().toLowerCase();
   const filtered = state.documents.filter(function (doc) {
     if (!query) {
       return true;
@@ -313,7 +380,7 @@ function renderDocList() {
 }
 
 function renderLineView(content, importantLines) {
-  const lines = content.split("\n");
+  const lines = (content || "").split("\n");
   const importantSet = new Set(importantLines || []);
   els.lineView.innerHTML = "";
 
@@ -323,6 +390,7 @@ function renderLineView(content, importantLines) {
     button.type = "button";
     button.className = "line-row";
     button.dataset.line = String(lineNumber);
+
     if (importantSet.has(lineNumber)) {
       button.classList.add("important");
     }
@@ -385,8 +453,7 @@ function renderWorkspace() {
 
   els.emptyState.classList.add("hidden");
   els.docWorkspace.classList.remove("hidden");
-  els.docTitleInput.value = doc.title;
-  els.docContentInput.value = doc.content;
+  els.docTitleText.textContent = doc.title;
   els.docMeta.textContent =
     "생성: " +
     new Date(doc.createdAt).toLocaleString("ko-KR") +
@@ -394,10 +461,9 @@ function renderWorkspace() {
     new Date(doc.updatedAt).toLocaleString("ko-KR") +
     " / 출처: " +
     doc.source;
-  els.selectedLineLabel.textContent = state.selectedLine ? String(state.selectedLine) : "없음";
 
-  renderMarkdownPreview(els.docContentInput.value);
-  renderLineView(els.docContentInput.value, doc.importantLines || []);
+  renderMarkdownPreview(doc.content);
+  selectLine(state.selectedLine);
   renderComments(doc);
 }
 
@@ -466,8 +532,9 @@ async function handleFileUpload(event) {
 
 async function handleManualSubmit(event) {
   event.preventDefault();
-  const title = els.manualTitle.value.trim() || "직접 입력 문서";
-  const content = els.manualContent.value;
+  const title = (els.manualTitle.value || "").trim() || "직접 입력 문서";
+  const content = els.manualContent.value || "";
+
   if (!content.trim()) {
     setStatus("문서 내용이 비어 있습니다.");
     return;
@@ -484,10 +551,12 @@ function handleDocListClick(event) {
   if (!target) {
     return;
   }
+
   const docId = Number(target.dataset.docId);
   if (!docId) {
     return;
   }
+
   state.selectedDocId = docId;
   state.selectedLine = null;
   renderAll();
@@ -498,23 +567,34 @@ function handleLineClick(event) {
   if (!row) {
     return;
   }
-  state.selectedLine = Number(row.dataset.line);
-  const doc = getSelectedDoc();
-  if (doc) {
-    renderLineView(els.docContentInput.value, doc.importantLines || []);
+
+  selectLine(Number(row.dataset.line), { autoTargetLine: true });
+}
+
+function handlePreviewClick(event) {
+  const previewLineNode = event.target.closest("[data-line]");
+  if (!previewLineNode || !els.markdownPreview.contains(previewLineNode)) {
+    return;
   }
-  els.selectedLineLabel.textContent = state.selectedLine ? String(state.selectedLine) : "없음";
+
+  const lineNumber = Number(previewLineNode.getAttribute("data-line"));
+  if (!lineNumber) {
+    return;
+  }
+
+  selectLine(lineNumber, { autoTargetLine: true, scrollLineView: true });
+  setStatus("Preview line selected: L" + lineNumber);
 }
 
 function createSummaryText(doc) {
-  const lines = doc.content.split("\n");
+  const lines = (doc.content || "").split("\n");
   const summary = [];
   summary.push("# " + doc.title + " 리뷰 요약");
   summary.push("");
   summary.push("- 생성: " + new Date(doc.createdAt).toLocaleString("ko-KR"));
   summary.push("- 수정: " + new Date(doc.updatedAt).toLocaleString("ko-KR"));
-  summary.push("- 중요 라인 수: " + doc.importantLines.length);
-  summary.push("- 코멘트 수: " + doc.comments.length);
+  summary.push("- 중요 라인 수: " + (doc.importantLines || []).length);
+  summary.push("- 코멘트 수: " + (doc.comments || []).length);
   summary.push("");
   summary.push("## 중요 라인");
 
@@ -547,35 +627,18 @@ function createSummaryText(doc) {
   return summary.join("\n");
 }
 
-async function handleSaveDoc() {
-  const doc = getSelectedDoc();
-  if (!doc) {
-    return;
-  }
-  const title = els.docTitleInput.value.trim() || "Untitled";
-  const content = els.docContentInput.value;
-
-  await apiFetch("/api/docs/" + doc.id + "/", {
-    method: "PUT",
-    body: { title: title, content: content }
-  });
-  await syncDocs();
-  setStatus("문서를 저장했습니다.");
-}
-
 async function handleDeleteDoc() {
   const doc = getSelectedDoc();
   if (!doc) {
     return;
   }
+
   const ok = window.confirm('"' + doc.title + '" 문서를 삭제하시겠습니까?');
   if (!ok) {
     return;
   }
 
-  await apiFetch("/api/docs/" + doc.id + "/", {
-    method: "DELETE"
-  });
+  await apiFetch("/api/docs/" + doc.id + "/", { method: "DELETE" });
   await syncDocs();
   setStatus("문서를 삭제했습니다.");
 }
@@ -588,10 +651,6 @@ async function handleToggleImportant() {
   }
   if (!state.selectedLine) {
     setStatus("중요 표시할 라인을 먼저 선택하세요.");
-    return;
-  }
-  if (hasUnsavedChanges()) {
-    setStatus("라인 기준 충돌 방지를 위해 먼저 저장하세요.");
     return;
   }
 
@@ -610,8 +669,9 @@ async function handleCommentSubmit(event) {
     setStatus("먼저 문서를 선택하세요.");
     return;
   }
+
   const targetType = els.commentTarget.value === "line" ? "line" : "document";
-  const text = els.commentText.value.trim();
+  const text = (els.commentText.value || "").trim();
 
   if (!text) {
     setStatus("코멘트 내용을 입력하세요.");
@@ -621,15 +681,11 @@ async function handleCommentSubmit(event) {
     setStatus("라인 코멘트는 라인을 먼저 선택해야 합니다.");
     return;
   }
-  if (targetType === "line" && hasUnsavedChanges()) {
-    setStatus("라인 기준 충돌 방지를 위해 먼저 저장하세요.");
-    return;
-  }
 
   await apiFetch("/api/docs/" + doc.id + "/comments/", {
     method: "POST",
     body: {
-      author: els.authorInput.value.trim() || "익명",
+      author: (els.authorInput.value || "").trim() || "익명",
       text: text,
       targetType: targetType,
       lineNumber: targetType === "line" ? state.selectedLine : null
@@ -646,10 +702,12 @@ async function handleCommentDelete(event) {
   if (!button) {
     return;
   }
+
   const doc = getSelectedDoc();
   if (!doc) {
     return;
   }
+
   const commentId = Number(button.dataset.commentId);
   if (!commentId) {
     return;
@@ -668,10 +726,7 @@ function handleSummaryCreate() {
     setStatus("요약할 문서가 없습니다.");
     return;
   }
-  if (hasUnsavedChanges()) {
-    setStatus("요약 생성 전 저장하면 최신 내용 기준으로 생성됩니다.");
-    return;
-  }
+
   els.summaryOutput.value = createSummaryText(doc);
   setStatus("요약을 생성했습니다.");
 }
@@ -682,7 +737,7 @@ function handleSummaryDownload() {
     setStatus("다운로드할 요약이 없습니다.");
     return;
   }
-  if (!els.summaryOutput.value.trim()) {
+  if (!(els.summaryOutput.value || "").trim()) {
     setStatus("먼저 요약을 생성하세요.");
     return;
   }
@@ -717,31 +772,10 @@ function bindEvents() {
   els.docSearch.addEventListener("input", renderDocList);
   els.docList.addEventListener("click", handleDocListClick);
   els.lineView.addEventListener("click", handleLineClick);
+  els.markdownPreview.addEventListener("click", handlePreviewClick);
 
   els.commentList.addEventListener("click", function (event) {
     handleCommentDelete(event).catch(function (error) {
-      setStatus(error.message);
-    });
-  });
-
-  els.docTitleInput.addEventListener("input", function () {
-    if (getSelectedDoc()) {
-      setStatus("문서가 수정됨. 저장 버튼을 눌러 반영하세요.");
-    }
-  });
-
-  els.docContentInput.addEventListener("input", function () {
-    const doc = getSelectedDoc();
-    if (!doc) {
-      return;
-    }
-    renderMarkdownPreview(els.docContentInput.value);
-    renderLineView(els.docContentInput.value, doc.importantLines || []);
-    setStatus("문서가 수정됨. 저장 버튼을 눌러 반영하세요.");
-  });
-
-  els.saveDocBtn.addEventListener("click", function () {
-    handleSaveDoc().catch(function (error) {
       setStatus(error.message);
     });
   });

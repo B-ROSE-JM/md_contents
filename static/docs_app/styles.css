@@ -205,8 +205,10 @@ button.danger {
   align-items: end;
 }
 
-.title-edit-wrap {
-  flex: 1;
+.doc-title-text {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .actions {
@@ -220,25 +222,12 @@ button.danger {
   font-size: 0.82rem;
 }
 
-.editor-preview-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  min-height: 0;
-}
-
 .subpanel {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
   display: grid;
   gap: 8px;
-}
-
-.subpanel textarea {
-  min-height: 280px;
-  font-family: var(--mono);
-  font-size: 0.85rem;
 }
 
 .markdown-body {
@@ -250,6 +239,30 @@ button.danger {
   max-height: 460px;
   line-height: 1.6;
   word-break: break-word;
+}
+
+.markdown-body [data-line] {
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, outline-color 0.12s ease;
+}
+
+.markdown-body [data-line]:hover {
+  background: #f3f7ff;
+}
+
+.markdown-body .preview-important {
+  background: #fff7d7;
+}
+
+.markdown-body .preview-selected {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+  background: #e8efff;
+}
+
+.markdown-body .preview-important.preview-selected {
+  background: #ffeeb0;
 }
 
 .markdown-body pre {
@@ -388,9 +401,6 @@ button.danger {
 
 @media (max-width: 1080px) {
   .layout {
-    grid-template-columns: 1fr;
-  }
-  .editor-preview-grid {
     grid-template-columns: 1fr;
   }
   .doc-list {
