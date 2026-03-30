@@ -73,7 +73,56 @@ function renderFencedCodeBlock(codeLines, language, lineNumber) {
   return "<pre" + lineAttr + "><code" + safeLang + ">" + escapeHtml(code) + "</code></pre>";
 }
 
+let markdownEngine = null;
+
+function ensureMarkdownEngine() {
+  if (markdownEngine) {
+    return markdownEngine;
+  }
+  if (!window.markdownit) {
+    return null;
+  }
+
+  const md = window.markdownit({
+    html: false,
+    linkify: true,
+    typographer: true,
+    breaks: false
+  });
+
+  const originalRenderToken = md.renderer.renderToken.bind(md.renderer);
+  md.renderer.renderToken = function (tokens, idx, options) {
+    const token = tokens[idx];
+    if (token && token.map && token.nesting === 1 && /_open$/.test(token.type)) {
+      token.attrSet("data-line", String(token.map[0] + 1));
+    }
+    return originalRenderToken(tokens, idx, options);
+  };
+
+  md.renderer.rules.fence = function (tokens, idx) {
+    const token = tokens[idx];
+    const info = (token.info || "").trim().split(/\s+/)[0].toLowerCase();
+    const lineAttr = token.map ? ' data-line="' + (token.map[0] + 1) + '"' : "";
+    const code = md.utils.escapeHtml(token.content || "");
+
+    if (info === "mermaid") {
+      return '<div class="mermaid"' + lineAttr + ">" + code + "</div>";
+    }
+
+    const classAttr = info ? ' class="language-' + md.utils.escapeHtml(info) + '"' : "";
+    return "<pre" + lineAttr + "><code" + classAttr + ">" + code + "</code></pre>";
+  };
+
+  markdownEngine = md;
+  return markdownEngine;
+}
+
 function markdownToHtml(markdown) {
+  const engine = ensureMarkdownEngine();
+  if (engine) {
+    return engine.render(markdown || "");
+  }
+
   const lines = (markdown || "").replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let inCode = false;

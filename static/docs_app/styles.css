@@ -273,6 +273,66 @@ button.danger {
   overflow: auto;
 }
 
+.markdown-body code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: #f1f5ff;
+  color: #1f2a44;
+  border-radius: 4px;
+  padding: 0.1em 0.32em;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 0.9rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #d0d8ea;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: #f6f8ff;
+  font-weight: 700;
+}
+
+.markdown-body tr:nth-child(even) td {
+  background: #fbfcff;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #c7d5ff;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #43506a;
+  background: #f8faff;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 22px;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 14px 0 8px;
+}
+
 .markdown-body .mermaid {
   border: 1px solid var(--line);
   border-radius: 8px;
